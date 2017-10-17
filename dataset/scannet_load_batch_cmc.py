@@ -7,7 +7,8 @@ import tensorflow as tf
 import numpy as np
 slim = tf.contrib.slim
 
-train_data_path = '/home/closerbibi/workspace/data/brats2015/tfrecord'
+#train_data_path = '/home/closerbibi/workspace/data/brats2015/tfrecord'
+train_data_path = '/home/closerbibi/workspace/data/scannet-segmentation/tfrecord'
 
 def get_batch_val(filename,
 			  batch_size=5,

@@ -17,19 +17,20 @@ import SimpleITK as sitk
 from random import shuffle
 from dataset.utils import writeImage, writeMedicalImage, fast_hist
 import scipy.ndimage
+import h5py
 
 from PIL import Image
 
 tf.app.flags.DEFINE_string(
- 'train_data', '/home/closerbibi/workspace/data/brats2015/BRATS2015_Training/',
+ 'train_data', '/media/disk3/data/scannet_task/voxel_labeling/h5_scannet_samples',
  'Directory of the datasets')
 
 tf.app.flags.DEFINE_string(
- 'val_data', '/home/closerbibi/workspace/data/brats2015/BRATS2015_Training/',
+ 'val_data', '/media/disk3/data/scannet_task/voxel_labeling/h5_scannet_samples/',
  'Directory of the datasets')
 
 tf.app.flags.DEFINE_string(
- 'path_save', '/home/closerbibi/workspace/data/brats2015/tfrecord/',
+ 'path_save', '/media/disk3/data/scannet_task/voxel_labeling/tfrecord/',
  'Dictionary to save sythtext record')
 
 tf.app.flags.DEFINE_boolean(
@@ -53,7 +54,7 @@ def _convert_to_example(image_data, label):
 def _processing_image(seq, label, depth):
     seqs = []
     labs = []
-    for d in [depth-2, depth-1, depth]: # three slices been stacked here
+    for d in [depth-2, depth-1, depth]:
         label_data = label[d]
         labs.append(np.array(label_data))
         mod = []
@@ -63,7 +64,7 @@ def _processing_image(seq, label, depth):
             # upsample 
             mod.append(image_data)
         seqs.append(np.array(mod))
-    seqs = np.array(seqs) # stacking four modalities array from single slice
+    seqs = np.array(seqs)
     labs = np.array(labs)
     return seqs.tobytes(), labs.tobytes()
 
@@ -86,8 +87,8 @@ def _processing_image_single(seq, label, depth):
     # 4,240,240
     return mod.tobytes(), label_data.tobytes(), shape
 
-def norm_image_by_patient(imname):
-    im = sitk.GetArrayFromImage(sitk.ReadImage(imname)).astype(np.float32)
+def norm_image_by_cube(im):
+    #im = sitk.GetArrayFromImage(sitk.ReadImage(imname)).astype(np.float32)
     return (im - im.mean()) / im.std()
     roi_index = im > 0
     mean = im[roi_index].mean()
@@ -95,6 +96,14 @@ def norm_image_by_patient(imname):
     im[roi_index] -= mean
     im[roi_index] /= std
     return im
+
+def get_image_label(h5name):
+    data = h5py.File(h5name)
+    im = np.transpose(data['data'], (1,0,2,3,4))
+    imoc = im[0]
+    imvi = im [1]
+    label = data['label']
+    return imoc, imvi, label
 
 def count_class_freq(label_batch):
   hist = np.zeros(5)
@@ -132,50 +141,50 @@ def count_freq(labels):
     count_class_freq(labels)
 
 def run():
-    folderHGG = glob.glob(FLAGS.train_data + 'HGG/*')
-    folderLGG = glob.glob(FLAGS.train_data + 'LGG/*')
-    folder_train = folderHGG[:-10] + folderLGG[:-5]
-    folder_val = folderHGG[-10:] + folderLGG[-5:]
-    tf_filename = FLAGS.path_save+'lala.tfrecord'
+    folderTrain = glob.glob(FLAGS.train_data + '/trainval*.h5')
+    folderTest = glob.glob(FLAGS.train_data + '/test*.h5')
+    folder_train = folderTrain[:-5]
+    folder_val = folderTrain[-5:]
+    tf_filename = FLAGS.path_save+'scannet_train.tfrecord'
     all_example = []
     print("Saving training record....")
     all_label_data = []
     with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
         for index, i in enumerate(folder_train):
             print(index)
-            imname = i.split("/")[-1]
-            #flair = glob.glob(i + '/*flair.nii');
-            #t2 = glob.glob(i + '/*t2.nii')
-            #t1 = glob.glob(i + '/*t1.nii')
-            #t1c = glob.glob(i + '/*t1ce.nii')
-            #t1 = [_t1 for _t1 in t1 if not _t1 in t1c]
-            #label = glob.glob(i + '/*seg*.nii')[0]
+
+            ###############
+            if index == 3:
+                break
+            ###############
+
             ##### change dataset
-            flair = glob.glob(i + '/*Flair*/*.mha');
-            t2 = glob.glob(i + '/*T2*/*.mha')
-            t1 = glob.glob(i + '/*T1*/*.mha')
-            t1c = glob.glob(i + '/*T1c*/*.mha')
-            t1 = [_t1 for _t1 in t1 if not _t1 in t1c]
-            try:
-                label = glob.glob(i + '/*OT*/*.mha')[0]
-            except:
-                pdb.set_trace()
-            #####
-            label = sitk.GetArrayFromImage(sitk.ReadImage(label)).astype(np.float32)
-            seq = [norm_image_by_patient(flair[0]),
-            norm_image_by_patient(t2[0]),
-            norm_image_by_patient(t1[0]),
-            norm_image_by_patient(t1c[0])]
-            ind = 0
-            for depth in range(2,155):
-                is_valid, sample_num = checkLabel(label, depth)
-                if ( not is_valid):
-                    continue
-                for i in range(sample_num):
-                    image_data, label_data = _processing_image(seq, label, depth)
-                    #all_label_data.append(label[depth].flatten().astype(np.int64))
-                    example = _convert_to_example(image_data, label_data)
-                    all_example.append(example)
+            imoc, imvi, label_layer = get_image_label(i)
+
+            for im_ind in range(imoc.shape[0]):
+                im0 = imoc[im_ind]
+                im1 = imvi[im_ind]
+                label = np.zeros(im0.shape)
+                seq = [norm_image_by_cube(im0),
+                       norm_image_by_cube(im1)]
+
+                for depth in range(62):
+                    # change label format (10000,1,62) --> (10000,1,62,31,31)
+                    idx = np.where(im0[depth]!=0)
+                    if len(idx[0]) == 0 or label_layer[im_ind,0,depth] == 0:
+                        continue
+                    # label of one slice
+                    label[depth,idx[0],idx[1]] = label_layer[im_ind,0,depth]
+                for depth in range(62):
+                    is_valid, sample_num = checkLabel(label, depth)
+                    if ( not is_valid):
+                        continue
+                    for i in range(sample_num):
+                        # image_data is the array containing three image(slices)
+                        image_data, label_data = _processing_image(seq, label, depth)
+                        #all_label_data.append(label[depth].flatten().astype(np.int64))
+                        example = _convert_to_example(image_data, label_data)
+                        all_example.append(example)
                 #tfrecord_writer.write(example.SerializeToString()) 
         #count_freq(all_label_data)
         print("slices:", len(all_example))
@@ -191,13 +200,6 @@ def run():
         tf_filename = FLAGS.path_save+imname+'.tfrecord'
         with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
             imname = i.split("/")[-1]
-            #flair = glob.glob(i + '/*flair.nii')
-            #t2 = glob.glob(i + '/*t2.nii')
-            #t1 = glob.glob(i + '/*t1.nii')
-            #t1c = glob.glob(i + '/*t1ce.nii')
-            #t1 = [_t1 for _t1 in t1 if not _t1 in t1c]
-            #label = glob.glob(i + '/*seg.nii')[0]
-            
             ##### change dataset
             flair = glob.glob(i + '/*Flair*/*.mha');
             t2 = glob.glob(i + '/*T2*/*.mha')

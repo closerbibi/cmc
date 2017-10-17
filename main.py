@@ -5,6 +5,7 @@ Train scripts
 import tensorflow as tf
 from tensorflow.python.ops import control_flow_ops
 import os, os.path
+import pdb
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),'..')))
 import tf_utils
@@ -36,7 +37,7 @@ tf.app.flags.DEFINE_string(
 # General Flags.
 # =========================================================================== #
 tf.app.flags.DEFINE_string(
-	'train_dir', '/data/CVPR_Release/v2/Logs2',
+	'train_dir', '/home/closerbibi/workspace/data/brats2015/BRATS2015', #	'train_dir', '/data/CVPR_Release/v2/Logs2',
 	'Directory where checkpoints and event logs are written to.')
 tf.app.flags.DEFINE_integer('num_clones', 1,
 							'Number of model clones to deploy.')
@@ -168,7 +169,7 @@ tf.app.flags.DEFINE_string(
 	'preprocessing_name', None, 'The name of the preprocessing to use. If left '
 	'as `None`, then the model_name flag is used.')
 tf.app.flags.DEFINE_integer(
-	'batch_size', 10, 'The number of samples in each batch.')
+	'batch_size', 5, 'The number of samples in each batch.') # gabriel: 10 --> 5
 tf.app.flags.DEFINE_integer(
 	'train_image_size', None, 'Train image size')
 tf.app.flags.DEFINE_integer('max_number_of_steps', 40000,
@@ -259,7 +260,6 @@ def main(_):
                                         file_pattern = FLAGS.file_pattern,
                                         is_training = True,
                                         shuffe = FLAGS.shuffle_data)
-
         # =================================================================== #
         # Define the model running on every GPU.
         # =================================================================== #
@@ -349,6 +349,7 @@ def main(_):
         update_ops.append(grad_updates)
 
         update_op = tf.group(*update_ops)
+        # ops "update_op" must be done before executing "total_loss"
         train_tensor = control_flow_ops.with_dependencies([update_op], total_loss,
                                                             name='train_op')
 
@@ -396,7 +397,6 @@ def main(_):
                                 keep_checkpoint_every_n_hours=1.0,
                                 write_version=2,
                                 pad_step_number=False)
-
 
         slim.learning.train(
             train_tensor,
