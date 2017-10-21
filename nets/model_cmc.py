@@ -6,6 +6,7 @@ from collections import namedtuple
 from math import ceil
 import convLSTM_upgrade as convLSTM
 import copy
+import pdb
 
 CMC_Params = namedtuple('CMC_Parameters', 
 										['img_shape',
@@ -13,9 +14,9 @@ CMC_Params = namedtuple('CMC_Parameters',
 										 'num_classes',
 										 ])
 default_params = CMC_Params(
-    img_shape=(240, 240),
+    img_shape=(32, 32), # gabriel: 240 --> 32
     sequence_length=3,
-    num_classes=5,
+    num_classes=21, # gabriel: 5 --> 21
 )
 
 def _variable_on_cpu(name, shape, initializer):
@@ -99,7 +100,7 @@ def DTS(X, r, name):
             X = _phase_shift(X, r)
     return X
 
-def deconv_layer(inputT, f_shape, output_shape, stride=2, name=None, reuse=False):
+def deconv_layer(inputT, f_shape, output_shape, stride=2, name=None, reuse=False, finale=False):
         strides = [1, stride, stride, 1]
         def get_deconv_filter(f_shape):
             """
@@ -139,7 +140,7 @@ class Model(object):
     def conv_fuse(self, net, is_training=True, channel=20, reuse=False):                     
         with tf.variable_scope('CMC2', reuse=reuse) as scope:
             kernel3D_2 = _variable_with_weight_decay('weights_3d',
-                                            shape=[4, 1, 1, channel, channel],
+                                            shape=[2, 1, 1, channel, channel], # gabriel: 4 --> 2, cross-modality conv.
                                             initializer=tf.truncated_normal_initializer(0.0, 0.01),
                                             wd=None)
             net = tf.nn.conv3d(net, kernel3D_2, [1, 1, 1, 1, 1], padding='VALID')
@@ -160,6 +161,7 @@ class Model(object):
             net = slim.repeat(inputs, 2, slim.conv2d, 40, [k_size, k_size], scope='conv1')
             end_points['conv1'] = net
             net = slim.max_pool2d(net, [2, 2], scope='pool1') # => 16 X 50
+            #net = slim.max_pool2d(net, [2, 2], scope='pool1', padding='SAME') # => 16 X 50, # gabriel
             net = slim.repeat(net, 3, slim.conv2d, 40, [k_size, k_size], scope='conv2') # => 16 X 50
             end_points['conv2'] = net
             net = slim.max_pool2d(net, [2, 2], scope='pool2') #  => 8 X 25
@@ -207,7 +209,7 @@ class Model(object):
             net = slim.dropout(net, 0.8, is_training=is_training)
             print(net.get_shape()) # 120
             _, out_h, out_w, _ = net.get_shape().as_list()
-            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up4", reuse=reuse)
+            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up4", reuse=reuse, finale=True)
             net = tf.multiply(f1, net)
             net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv9')
             net = slim.dropout(net, 0.8, is_training=is_training)
@@ -231,8 +233,10 @@ class Model(object):
         fuse_feature4 = [[] for _ in range(self.params.sequence_length)]
         mod = [[] for _ in range(self.params.sequence_length)]
         for i in range(self.params.sequence_length):
-            image_mod = tf.split(axis=3, num_or_size_splits=4, value=images_seq[i])
-            for j in range(4):
+            #image_mod = tf.split(axis=3, num_or_size_splits=4, value=images_seq[i])
+            image_mod = tf.split(axis=3, num_or_size_splits=2, value=images_seq[i]) # gabriel
+            #for j in range(4):
+            for j in range(2): # gabriel: 4 --> 2
                 # share weight or not 
                 with tf.variable_scope("MME"+str(j)):
                     modality_feature = self.encoder(image_mod[j], is_training=is_training, reuse=(i>0))
@@ -319,7 +323,7 @@ class Model(object):
             1.0, 
             1.0, 
             1.0, 
-            1.0
+            1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0
         ])
         labels = tf.transpose(labels, [1, 0, 2, 3, 4])
         labels = tf.unstack(labels)
@@ -329,14 +333,16 @@ class Model(object):
             logit = tf.reshape(logit, (-1, self.params.num_classes))
             logit = logit + epsilon
             labels_for_eval = tf.reshape(target, (-1, 1))
-            
+
             target = tf.reshape(target, [-1])
             target = tf.reshape(tf.one_hot(target, depth=self.params.num_classes), (-1, self.params.num_classes))
-            
+            print('loss weight', target)
+
             softmax = tf.nn.softmax(logit)
             mean_iou = slim.metrics.streaming_mean_iou(tf.reshape(tf.argmax(softmax, 1), (-1,1)), labels_for_eval, self.params.num_classes)
-            
+
             cross_entropy = -tf.reduce_sum(tf.multiply(target * tf.log(softmax + epsilon), loss_weight), axis=[1])
+            #cross_entropy = -tf.reduce_sum(target * tf.log(softmax + epsilon), axis=[1]) # gabriel: disable loss weight
             # cross_entropy = self.generalised_dice_loss(logit, target)
             loss_list.append(cross_entropy)
         loss_list_p = tf.add_n(loss_list)

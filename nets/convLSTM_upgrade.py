@@ -17,6 +17,7 @@ from tensorflow.contrib.rnn.python.ops import core_rnn_cell
 # Future : Replace it with tensorflow.python.util.nest
 import collections
 import six
+import pdb
 
 def _is_sequence(seq):
   return (isinstance(seq, collections.Sequence)

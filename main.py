@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),'..')))
 import tf_utils
 from deployment import model_deploy
-import dataset.load_batch_cmc as load_batch_cmc
+import dataset.scannet_load_batch_cmc as load_batch_cmc
 
 import pickle
 from nets import model_cmc
@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_string(
 # General Flags.
 # =========================================================================== #
 tf.app.flags.DEFINE_string(
-	'train_dir', '/home/closerbibi/workspace/data/brats2015/BRATS2015', #	'train_dir', '/data/CVPR_Release/v2/Logs2',
+	'train_dir', '/home/closerbibi/workspace/data/scannet-segmentation', #	'train_dir', '/data/CVPR_Release/v2/Logs2',
 	'Directory where checkpoints and event logs are written to.')
 tf.app.flags.DEFINE_integer('num_clones', 1,
 							'Number of model clones to deploy.')
@@ -79,7 +79,7 @@ tf.app.flags.DEFINE_integer(
 tf.app.flags.DEFINE_float(
 	'weight_decay', 0.0005, 'The weight decay on the model weights_1.')
 tf.app.flags.DEFINE_string(
-	'optimizer', 'adam',
+	'optimizer', 'momentum',#gabriel: 'adam',
 	'The name of the optimizer, one of "adadelta", "adagrad", "adam",'
 	'"ftrl", "momentum", "sgd" or "rmsprop".')
 tf.app.flags.DEFINE_float(
@@ -118,7 +118,7 @@ tf.app.flags.DEFINE_string(
 	'fixed',
 	'Specifies how the learning rate is decayed. One of "fixed", "exponential",'
 	' or "polynomial"')
-tf.app.flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
+tf.app.flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.') # gabriel: 0.01 -> 0.001
 tf.app.flags.DEFINE_float(
 	'end_learning_rate', 0.001,
 	'The minimal end learning rate used by a polynomial decay learning rate.')
@@ -172,7 +172,7 @@ tf.app.flags.DEFINE_integer(
 	'batch_size', 5, 'The number of samples in each batch.') # gabriel: 10 --> 5
 tf.app.flags.DEFINE_integer(
 	'train_image_size', None, 'Train image size')
-tf.app.flags.DEFINE_integer('max_number_of_steps', 40000,
+tf.app.flags.DEFINE_integer('max_number_of_steps', 80000, # gabriel: 40000 --> 80000
 							'The maximum number of training steps.')
 tf.app.flags.DEFINE_integer('num_samples', 40000,
 							'Num of training set')
@@ -200,7 +200,7 @@ tf.app.flags.DEFINE_boolean(
     'fine_tune', False,
     'Weather use fine_tune')
 tf.app.flags.DEFINE_integer(
-    'validation_check', 1000,
+    'validation_check', 10,
     'frequency to eval'
 )
 
@@ -227,6 +227,10 @@ def main(_):
         with tf.device(deploy_config.variables_device()):
             global_step = slim.create_global_step()
         
+        te = tf.constant(3)
+        tes = tf.Print(te, [te], message='this is tes')
+        tf.Print(te, [te], message='this is tes')
+
         net = model_cmc.Model()
 
         with tf.device(deploy_config.inputs_device()):

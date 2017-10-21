@@ -42,6 +42,14 @@ FLAGS = tf.app.flags.FLAGS
 ## SythText datasets is too big to store in a record. 
 ## So Transform tfrecord according to dir name
 
+def label_mapping(label):
+    nonuse = [13,15,17,18,19,20,21,22,23,25,26,27,29,30,31,32,35,37,38,39,255]
+    if label in nonuse:
+        new_label = 40
+    else:
+        new_label = label
+    return new_label
+
 def _convert_to_example(image_data, label):
     #print 'shape: {}, height:{}, width:{}'.format(shape,shape[0],shape[1])
     example = tf.train.Example(features=tf.train.Features(feature={
@@ -143,9 +151,9 @@ def count_freq(labels):
 def run():
     folderTrain = glob.glob(FLAGS.train_data + '/trainval*.h5')
     folderTest = glob.glob(FLAGS.train_data + '/test*.h5')
-    folder_train = folderTrain[:-5]
-    folder_val = folderTrain[-5:]
-    tf_filename = FLAGS.path_save+'scannet_train.tfrecord'
+    folder_train = folderTrain[:20] ############### test
+    folder_val = folderTrain[-1:]
+    tf_filename = FLAGS.path_save+'scannet_train32.tfrecord'
     all_example = []
     print("Saving training record....")
     all_label_data = []
@@ -153,29 +161,28 @@ def run():
         for index, i in enumerate(folder_train):
             print(index)
 
-            ###############
-            if index == 3:
-                break
-            ###############
-
             ##### change dataset
             imoc, imvi, label_layer = get_image_label(i)
+            imoc = np.pad(imoc, [(0,0),(0,0),(0,1),(0,1)], mode='constant', constant_values=0)
+            imvi = np.pad(imvi, [(0,0),(0,0),(0,1),(0,1)], mode='constant', constant_values=0)
 
             for im_ind in range(imoc.shape[0]):
-                im0 = imoc[im_ind]
-                im1 = imvi[im_ind]
-                label = np.zeros(im0.shape)
-                seq = [norm_image_by_cube(im0),
-                       norm_image_by_cube(im1)]
+                im0 = imoc[im_ind].astype('float32')
+                im1 = imvi[im_ind].astype('float32')
+                label = np.zeros(im0.shape, dtype=np.float32)
+                #seq = [norm_image_by_cube(im0),
+                #       norm_image_by_cube(im1)]
+                seq = [im0, im1]
 
                 for depth in range(62):
-                    # change label format (10000,1,62) --> (10000,1,62,31,31)
+                    # change label format (10000,1,62) --> (10000,1,62,31,31) --> 32
                     idx = np.where(im0[depth]!=0)
                     if len(idx[0]) == 0 or label_layer[im_ind,0,depth] == 0:
                         continue
                     # label of one slice
-                    label[depth,idx[0],idx[1]] = label_layer[im_ind,0,depth]
-                for depth in range(62):
+                    new_label = label_mapping(label_layer[im_ind,0,depth])
+                    label[depth,idx[0],idx[1]] = new_label
+                for depth in range(2,62):
                     is_valid, sample_num = checkLabel(label, depth)
                     if ( not is_valid):
                         continue
@@ -185,6 +192,7 @@ def run():
                         #all_label_data.append(label[depth].flatten().astype(np.int64))
                         example = _convert_to_example(image_data, label_data)
                         all_example.append(example)
+                        assert(len(image_data)==len(label_data)*2)
                 #tfrecord_writer.write(example.SerializeToString()) 
         #count_freq(all_label_data)
         print("slices:", len(all_example))
@@ -195,33 +203,38 @@ def run():
     print 'Transform to tfrecord finished'
     print("Saving validation record....")
     for index, i in enumerate(folder_val):
-        imname = i.split("/")[-1]
-        print(imname)
-        tf_filename = FLAGS.path_save+imname+'.tfrecord'
-        with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
-            imname = i.split("/")[-1]
-            ##### change dataset
-            flair = glob.glob(i + '/*Flair*/*.mha');
-            t2 = glob.glob(i + '/*T2*/*.mha')
-            t1 = glob.glob(i + '/*T1*/*.mha')
-            t1c = glob.glob(i + '/*T1c*/*.mha')
-            t1 = [_t1 for _t1 in t1 if not _t1 in t1c]
-            try:
-                label = glob.glob(i + '/*OT*/*.mha')[0]
-            except:
-                pdb.set_trace()
-            #####
-            label = sitk.GetArrayFromImage(sitk.ReadImage(label)).astype(np.float32)
-            seq = [norm_image_by_patient(flair[0]),
-            norm_image_by_patient(t2[0]),
-            norm_image_by_patient(t1[0]),
-            norm_image_by_patient(t1c[0])]
-            ind = 0
-            for depth in range(155):
-                ind += 1
-                image_data, label_data, shape = _processing_image_single(seq, label, depth)
-                example = _convert_to_example(image_data, label_data)
-                tfrecord_writer.write(example.SerializeToString()) 
+        ##### change dataset
+        imoc, imvi, label_layer = get_image_label(i)
+        imoc = np.pad(imoc, [(0,0),(0,0),(0,1),(0,1)], mode='constant', constant_values=0)
+        imvi = np.pad(imvi, [(0,0),(0,0),(0,1),(0,1)], mode='constant', constant_values=0)
+        imname = i.split("/")[-1].split('.')[0]
+        for im_ind in range(imoc.shape[0]):
+            print(im_ind)
+            tf_filename = FLAGS.path_save+'val/'+imname+'_{:07d}'.format(im_ind)+'.tfrecord'
+            with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
+                ##### change dataset
+                im0 = imoc[im_ind].astype('float32')
+                im1 = imvi[im_ind].astype('float32')
+                label = np.zeros(im0.shape, dtype=np.float32)
+                #seq = [norm_image_by_cube(im0),
+                #       norm_image_by_cube(im1)]
+                seq = [im0, im1]
+
+                for depth in range(62):
+                    # change label format (10000,1,62) --> (10000,1,62,31,31) --> 32
+                    idx = np.where(im0[depth]!=0)
+                    if len(idx[0]) == 0 or label_layer[im_ind,0,depth] == 0:
+                        continue
+                    # label of one slice
+                    new_label = label_mapping(label_layer[im_ind,0,depth])
+                    label[depth,idx[0],idx[1]] = new_label
+                ind = 0
+                for depth in range(62):
+                    ind += 1
+                    image_data, label_data, shape = _processing_image_single(seq, label, depth)
+                    example = _convert_to_example(image_data, label_data)
+                    tfrecord_writer.write(example.SerializeToString()) 
+
     print 'Transform to tfrecord finished'
 
 if __name__ == '__main__':
