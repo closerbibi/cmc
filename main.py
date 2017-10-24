@@ -13,7 +13,7 @@ from deployment import model_deploy
 import dataset.scannet_load_batch_cmc as load_batch_cmc
 
 import pickle
-from nets import model_cmc
+from nets import model_cmc_layer # gabriel
 from tensorflow.contrib.slim.python.slim.learning import train_step
 from tensorflow.python.framework import ops
 # from beholder.beholder import Beholder
@@ -59,7 +59,7 @@ tf.app.flags.DEFINE_integer(
 	'num_preprocessing_threads', 4,
 	'The number of threads used to create the batches.')
 tf.app.flags.DEFINE_integer(
-	'log_every_n_steps', 100,
+	'log_every_n_steps', 1, # gabriel: 100
 	'The frequency with which logs are print.')
 tf.app.flags.DEFINE_integer(
 	'save_summaries_secs', 60,
@@ -68,7 +68,7 @@ tf.app.flags.DEFINE_integer(
 	'save_interval_secs', 60*10,
 	'The frequency with which the model is saved, in seconds.')
 tf.app.flags.DEFINE_float(
-	'gpu_memory_fraction', 0.90
+	'gpu_memory_fraction', 0.80 # gabriel: 0.90 --> 0.80
 	, 'GPU memory fraction to use.')
 tf.app.flags.DEFINE_integer(
 	'task', 0, 'Task id of the replica running the training.')
@@ -79,7 +79,7 @@ tf.app.flags.DEFINE_integer(
 tf.app.flags.DEFINE_float(
 	'weight_decay', 0.0005, 'The weight decay on the model weights_1.')
 tf.app.flags.DEFINE_string(
-	'optimizer', 'momentum',#gabriel: 'adam',
+	'optimizer', 'adam',#gabriel: 'adam',
 	'The name of the optimizer, one of "adadelta", "adagrad", "adam",'
 	'"ftrl", "momentum", "sgd" or "rmsprop".')
 tf.app.flags.DEFINE_float(
@@ -151,7 +151,7 @@ tf.app.flags.DEFINE_float('clip_gradient_norm', 0,
 tf.app.flags.DEFINE_string(
 	'dataset_name', 'sythtext', 'The name of the dataset to load.')
 tf.app.flags.DEFINE_integer(
-	'num_classes', 2, 'Number of classes to use in the dataset.')
+	'num_classes', 21, 'Number of classes to use in the dataset.')
 tf.app.flags.DEFINE_string(
 	'dataset_split_name', 'train', 'The name of the train/test split.')
 tf.app.flags.DEFINE_string(
@@ -169,12 +169,12 @@ tf.app.flags.DEFINE_string(
 	'preprocessing_name', None, 'The name of the preprocessing to use. If left '
 	'as `None`, then the model_name flag is used.')
 tf.app.flags.DEFINE_integer(
-	'batch_size', 5, 'The number of samples in each batch.') # gabriel: 10 --> 5
+	'batch_size', 1, 'The number of samples in each batch.') # gabriel: 10 --> 5
 tf.app.flags.DEFINE_integer(
 	'train_image_size', None, 'Train image size')
-tf.app.flags.DEFINE_integer('max_number_of_steps', 80000, # gabriel: 40000 --> 80000
+tf.app.flags.DEFINE_integer('max_number_of_steps', 40000, # gabriel: 40000 --> 80000
 							'The maximum number of training steps.')
-tf.app.flags.DEFINE_integer('num_samples', 40000,
+tf.app.flags.DEFINE_integer('num_samples', 40000, # gabriel: 40000->1
 							'Num of training set')
 # =========================================================================== #
 # Fine-Tuning Flags.
@@ -200,7 +200,7 @@ tf.app.flags.DEFINE_boolean(
     'fine_tune', False,
     'Weather use fine_tune')
 tf.app.flags.DEFINE_integer(
-    'validation_check', 10,
+    'validation_check', 10000, # gabriel
     'frequency to eval'
 )
 
@@ -226,12 +226,8 @@ def main(_):
         # Create global_step
         with tf.device(deploy_config.variables_device()):
             global_step = slim.create_global_step()
-        
-        te = tf.constant(3)
-        tes = tf.Print(te, [te], message='this is tes')
-        tf.Print(te, [te], message='this is tes')
 
-        net = model_cmc.Model()
+        net = model_cmc_layer.Model() # gabriel
 
         with tf.device(deploy_config.inputs_device()):
             if (FLAGS.model == 'unet'):
