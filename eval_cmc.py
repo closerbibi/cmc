@@ -14,13 +14,13 @@ from dataset.utils import writeImage, cc, postprocessing, evaluate
 tf.app.flags.DEFINE_boolean(
 	'post_processing', False, 'post-processing')
 tf.app.flags.DEFINE_string(
-	'checkpoint_dir', '/data/CVPR_Release/v2/Logs_cmc/', 'path to checkpoint')
+	'checkpoint_dir', 'logs', 'path to checkpoint')
 tf.app.flags.DEFINE_string(
 	'model', 'unet', 'Model to eval')
 FLAGS = tf.app.flags.FLAGS
 #checkpoint_dir = './tmp/'
-checkpoint_dir = '/data/CVPR_Release/v2/Logs2/'
-datasetDir = '/data/CVPR_Release/v2/dataset/validation_original_cmc/'
+checkpoint_dir = 'logs'
+datasetDir = '/home/closerbibi/workspace/data/scannet-segmentation/tfrecord/val'
 
 import numpy as np
 
@@ -30,8 +30,8 @@ def padding(im, shape=(240,240)):
     new_im[8: 240-8, 8: 240-8] = im
     return new_im
 
-img_input = tf.placeholder(tf.float32, shape=(1, 3, 240, 240, 4))
-la_input = tf.placeholder(tf.int32, shape=(1, 3, 240, 240, 1))
+img_input = tf.placeholder(tf.float32, shape=(1, 3, 32, 32, 2)) # gabriel: 240 --> 32, 4-->2
+la_input = tf.placeholder(tf.int32, shape=(1, 3, 32, 32, 1)) # gabriel
 
 is_training =tf.placeholder(tf.bool)
 
@@ -55,7 +55,7 @@ saver.restore(sess, dir)
 sess.run(tf.local_variables_initializer())
 print("Model restore!")
 
-num_class = 5
+num_class = 41 # gabriel 5 --> 41
 hist = np.zeros((num_class, num_class))
 out_slices = []
 la_slices = []

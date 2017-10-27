@@ -6,8 +6,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),'..')))
 import tensorflow as tf 
 import numpy as np
 slim = tf.contrib.slim
+import pdb
 
-train_data_path = '/home/closerbibi/workspace/data/brats2015/tfrecord'
+#train_data_path = '/home/closerbibi/workspace/data/brats2015/tfrecord'
+train_data_path = '/home/closerbibi/workspace/data/scannet-segmentation/tfrecord'
 
 def get_batch_val(filename,
 			  batch_size=5,
@@ -23,10 +25,12 @@ def get_batch_val(filename,
                 })  # return image and label
     with tf.name_scope('cmc/label'):
         label = tf.decode_raw(features['label/encoded'], tf.float32)
-        label = tf.transpose(tf.reshape(label, [3,1,240,240]), (0,2,3,1))
+        #label = tf.transpose(tf.reshape(label, [3,1,240,240]), (0,2,3,1))
+        label = tf.transpose(tf.reshape(label, [3,1,32,32]), (0,2,3,1)) # gabriel: 240 -> 32 
     with tf.name_scope('cmc/image'):
         image = tf.decode_raw(features['image/encoded'], tf.float32)
-        image = tf.transpose(tf.reshape(image, [3,4,240,240]), (0,2,3,1))
+        #image = tf.transpose(tf.reshape(image, [3,4,240,240]), (0,2,3,1))
+        image = tf.transpose(tf.reshape(image, [3,2,32,32]), (0,2,3,1)) # gabriel: 240 -> 32, 4-->2
     #image = tf.reshape(image, [32, 100, 3])
     image = tf.cast(image, tf.float32)
     label = tf.cast(label, tf.int32)
@@ -46,7 +50,7 @@ def get_batch(dataset_dir,
 			  is_training = True,
 			  shuffe = False):
 
-    filename = train_data_path+'/train_cmc_original2.tfrecord'
+    filename = train_data_path+'/scannet_train32.tfrecord'
     filename_queue = tf.train.string_input_producer(
         [filename], num_epochs=50)
     reader = tf.TFRecordReader()
@@ -56,12 +60,15 @@ def get_batch(dataset_dir,
                     'image/encoded': tf.FixedLenFeature([], tf.string, default_value=''),
                     'label/encoded': tf.FixedLenFeature([], tf.string, default_value=''),
                 })  # return image and label
-    with tf.name_scope('cmc/label'):
-        label = tf.decode_raw(features['label/encoded'], tf.float32)
-        label = tf.transpose(tf.reshape(label, [3,1,240,240]), (0,2,3,1))
+
     with tf.name_scope('cmc/image'):
         image = tf.decode_raw(features['image/encoded'], tf.float32)
-        image = tf.transpose(tf.reshape(image, [3,4,240,240]), (0,2,3,1))
+        #image = tf.transpose(tf.reshape(image, [3,4,240,240]), (0,2,3,1))
+        image = tf.transpose(tf.reshape(image, [3,2,32,32]), (0,2,3,1)) # gabriel: 240 -> 32, 4-->2, chseq
+    with tf.name_scope('cmc/label'):
+        label = tf.decode_raw(features['label/encoded'], tf.float32)
+        #label = tf.transpose(tf.reshape(label, [3,1,240,240]), (0,2,3,1))
+        label = tf.transpose(tf.reshape(label, [3,1,32,32]), (0,2,3,1)) # gabriel: 240 -> 32 , chseq
     #image = tf.reshape(image, [32, 100, 3])
     image = tf.cast(image, tf.float32)
     label = tf.cast(label, tf.int32)
@@ -71,7 +78,7 @@ def get_batch(dataset_dir,
         image = tf.image.flip_left_right(image)
         label = tf.image.flip_left_right(label)
     """
-        
+
     do_a_crop_flip = tf.random_uniform([], seed=None)
     do_a_crop_flip = tf.greater(do_a_crop_flip, 0.5)
     image = tf.cond(do_a_crop_flip, lambda: tf.reverse_v2(image, [2]),

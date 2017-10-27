@@ -10,10 +10,10 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),'..')))
 import tf_utils
 from deployment import model_deploy
-import dataset.scannet_load_batch_cmc as load_batch_cmc
+import dataset.load_batch_cmc as load_batch_cmc #gabriel
 
 import pickle
-from nets import model_cmc_layer # gabriel
+from nets import model_cmc # gabriel
 from tensorflow.contrib.slim.python.slim.learning import train_step
 from tensorflow.python.framework import ops
 # from beholder.beholder import Beholder
@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_string(
 # General Flags.
 # =========================================================================== #
 tf.app.flags.DEFINE_string(
-	'train_dir', '/home/closerbibi/workspace/data/scannet-segmentation', #	'train_dir', '/data/CVPR_Release/v2/Logs2',
+	'train_dir', '/home/closerbibi/workspace/data/scannet-segmentation/logs', #	'train_dir', '/data/CVPR_Release/v2/Logs2',
 	'Directory where checkpoints and event logs are written to.')
 tf.app.flags.DEFINE_integer('num_clones', 1,
 							'Number of model clones to deploy.')
@@ -59,7 +59,7 @@ tf.app.flags.DEFINE_integer(
 	'num_preprocessing_threads', 4,
 	'The number of threads used to create the batches.')
 tf.app.flags.DEFINE_integer(
-	'log_every_n_steps', 1, # gabriel: 100
+	'log_every_n_steps', 100, # gabriel: 100
 	'The frequency with which logs are print.')
 tf.app.flags.DEFINE_integer(
 	'save_summaries_secs', 60,
@@ -68,7 +68,7 @@ tf.app.flags.DEFINE_integer(
 	'save_interval_secs', 60*10,
 	'The frequency with which the model is saved, in seconds.')
 tf.app.flags.DEFINE_float(
-	'gpu_memory_fraction', 0.80 # gabriel: 0.90 --> 0.80
+	'gpu_memory_fraction', 0.70 # gabriel: 0.90 --> 0.80
 	, 'GPU memory fraction to use.')
 tf.app.flags.DEFINE_integer(
 	'task', 0, 'Task id of the replica running the training.')
@@ -151,7 +151,7 @@ tf.app.flags.DEFINE_float('clip_gradient_norm', 0,
 tf.app.flags.DEFINE_string(
 	'dataset_name', 'sythtext', 'The name of the dataset to load.')
 tf.app.flags.DEFINE_integer(
-	'num_classes', 21, 'Number of classes to use in the dataset.')
+	'num_classes', 22, 'Number of classes to use in the dataset.') # gabriel
 tf.app.flags.DEFINE_string(
 	'dataset_split_name', 'train', 'The name of the train/test split.')
 tf.app.flags.DEFINE_string(
@@ -169,12 +169,12 @@ tf.app.flags.DEFINE_string(
 	'preprocessing_name', None, 'The name of the preprocessing to use. If left '
 	'as `None`, then the model_name flag is used.')
 tf.app.flags.DEFINE_integer(
-	'batch_size', 1, 'The number of samples in each batch.') # gabriel: 10 --> 5
+	'batch_size', 10, 'The number of samples in each batch.') # gabriel: 10 --> 5
 tf.app.flags.DEFINE_integer(
 	'train_image_size', None, 'Train image size')
 tf.app.flags.DEFINE_integer('max_number_of_steps', 40000, # gabriel: 40000 --> 80000
 							'The maximum number of training steps.')
-tf.app.flags.DEFINE_integer('num_samples', 40000, # gabriel: 40000->1
+tf.app.flags.DEFINE_integer('num_samples', 13000, # gabriel: 40000->1
 							'Num of training set')
 # =========================================================================== #
 # Fine-Tuning Flags.
@@ -200,7 +200,7 @@ tf.app.flags.DEFINE_boolean(
     'fine_tune', False,
     'Weather use fine_tune')
 tf.app.flags.DEFINE_integer(
-    'validation_check', 10000, # gabriel
+    'validation_check', 100, # gabriel
     'frequency to eval'
 )
 
@@ -227,7 +227,7 @@ def main(_):
         with tf.device(deploy_config.variables_device()):
             global_step = slim.create_global_step()
 
-        net = model_cmc_layer.Model() # gabriel
+        net = model_cmc.Model() # gabriel
 
         with tf.device(deploy_config.inputs_device()):
             if (FLAGS.model == 'unet'):
@@ -284,6 +284,10 @@ def main(_):
 
         end_points, mean_iou = clones[0].outputs
         update_ops.append(mean_iou[1])
+        
+        # gabriel: add mean iou to summary
+        summaries.add(tf.summary.scalar('mean_iou', mean_iou[0]))
+
         #for end_point in end_points:
         #	x = end_points[end_point]
         #	summaries.add(tf.summary.histogram('activations/' + end_point, x))
@@ -373,7 +377,8 @@ def main(_):
             if train_step_fn.step % FLAGS.validation_check == 0:
                 _mean_iou = session.run(train_step_fn.mean_iou)
                 print('evaluation step %d - loss = %.4f mean_iou = %.2f%%' %\
-                 (train_step_fn.step, total_loss, _mean_iou ))
+                 (train_step_fn.step, total_loss, _mean_iou*100 )) # gabriel
+
             # evaluated_tensors = session.run([end_points['conv4'], end_points['up1']])
             # example_frame = session.run(end_points['up2'])
             # visualizer.update(arrays=evaluated_tensors, frame=example_frame)
