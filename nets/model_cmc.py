@@ -160,28 +160,27 @@ class Model(object):
             # input b X 32 X 100 X channel
             net = slim.repeat(inputs, 2, slim.conv2d, 40, [k_size, k_size], scope='conv1')
             end_points['conv1'] = net
-            net = slim.max_pool2d(net, [2, 2], scope='pool1') # => 16 X 50
-            #net = slim.max_pool2d(net, [2, 2], scope='pool1', padding='SAME') # => 16 X 50, # gabriel
+            #net = slim.max_pool2d(net, [2, 2], scope='pool1') # => 16 X 50
             net = slim.repeat(net, 3, slim.conv2d, 40, [k_size, k_size], scope='conv2') # => 16 X 50
             end_points['conv2'] = net
-            net = slim.max_pool2d(net, [2, 2], scope='pool2') #  => 8 X 25
+            #net = slim.max_pool2d(net, [2, 2], scope='pool2') #  => 8 X 25
             net = slim.repeat(net, 3, slim.conv2d, 40, [k_size, k_size], scope='conv3')
             end_points['conv3'] = net
-            net = slim.max_pool2d(net, [2, 2], scope='pool3')
+            #net = slim.max_pool2d(net, [2, 2], scope='pool3')
             net = slim.repeat(net, 3, slim.conv2d, 40, [k_size, k_size], scope='conv4')
             end_points['conv4'] = net
             # gabriel: layer
-            #net = slim.max_pool2d(net, [2, 2], scope='pool4')
+            net = slim.max_pool2d(net, [2, 2], scope='pool4')
 
-            #net = slim.conv2d(net, 40, [k_size, k_size], scope='conv5')
-            #net = slim.conv2d(net, 40, [k_size, k_size], scope='conv5_1')
-            #end_points['conv5'] = net
+            net = slim.conv2d(net, 40, [k_size, k_size], scope='conv5')
+            net = slim.conv2d(net, 40, [k_size, k_size], scope='conv5_1')
+            end_points['conv5'] = net
 
-            #return [end_points['conv1'], end_points['conv2'], end_points['conv3'], end_points['conv4'], end_points['conv5']]
-            return [end_points['conv1'], end_points['conv2'], end_points['conv3'], end_points['conv4']]
+            return [end_points['conv1'], end_points['conv2'], end_points['conv3'], end_points['conv4'], end_points['conv5']]
+            #return [end_points['conv1'], end_points['conv2'], end_points['conv3'], end_points['conv4']]
 
-    #def decoder(self, net, f1, f2, f3, f4, is_training=True, reuse=True):
-    def decoder(self, net, f1, f2, f3, is_training=True, reuse=True): # gabriel
+    def decoder(self, net, f1, f2, f3, f4, is_training=True, reuse=True):
+    #def decoder(self, net, f1, f2, f3, is_training=True, reuse=True): # gabriel
         start_channel = 40
         batch_size, _, _, _ = net.get_shape().as_list()
         with slim.arg_scope([slim.conv2d],
@@ -193,33 +192,37 @@ class Model(object):
                             reuse=reuse):
 
             _, out_h, out_w, _ = net.get_shape().as_list()
+            # gabriel: output shape 2--> 1, disable upsampling
             net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up1", reuse=reuse)
-            #print('decode net', net.get_shape(), f4.get_shape())
-            #net = tf.multiply(f4, net) # gabriel
-            print('decode net', net.get_shape(), f3.get_shape())
-            net = tf.multiply(f3, net)
+            print('decode net', net.get_shape(), f4.get_shape())
+            net = tf.multiply(f4, net) # gabriel
+            #print('decode net', net.get_shape(), f3.get_shape())
+            #net = tf.multiply(f3, net)
             net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv6')
             net = slim.dropout(net, 0.8, is_training=is_training)
             print(net.get_shape()) #30
             _, out_h, out_w, _ = net.get_shape().as_list()
-            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up2", reuse=reuse)
-            net = tf.multiply(f2, net) # gabriel
+            # gabriel: output shape 2--> 1, disable upsampling
+            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*1, out_w*1, start_channel], 1, "up2", reuse=reuse)
+            net = tf.multiply(f3, net) # gabriel
             net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv7')
             net = slim.dropout(net, 0.8, is_training=is_training)
             print(net.get_shape()) # 60
             _, out_h, out_w, _ = net.get_shape().as_list()
-            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up3", reuse=reuse)
-            net = tf.multiply(f1, net) # gabriel
+            # gabriel: output shape 2--> 1, disable upsampling
+            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*1, out_w*1, start_channel], 1, "up3", reuse=reuse)
+            net = tf.multiply(f2, net) # gabriel
             net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv8')
             net = slim.dropout(net, 0.8, is_training=is_training)
             print(net.get_shape()) # 120
             # gabriel: remove one layer
-            #_, out_h, out_w, _ = net.get_shape().as_list()
-            #net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up4", reuse=reuse, finale=True)
-            #net = tf.multiply(f1, net)
-            #net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv9')
-            #net = slim.dropout(net, 0.8, is_training=is_training)
-            #print(net.get_shape())
+            _, out_h, out_w, _ = net.get_shape().as_list()
+            # gabriel: output shape 2--> 1, disable upsampling
+            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*1, out_w*1, start_channel], 1, "up4", reuse=reuse, finale=True)
+            net = tf.multiply(f1, net)
+            net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv9')
+            net = slim.dropout(net, 0.8, is_training=is_training)
+            print(net.get_shape())
 
             return net
 
@@ -236,7 +239,7 @@ class Model(object):
         fuse_feature1 = [[] for _ in range(self.params.sequence_length)]
         fuse_feature2 = [[] for _ in range(self.params.sequence_length)]
         fuse_feature3 = [[] for _ in range(self.params.sequence_length)]
-        #fuse_feature4 = [[] for _ in range(self.params.sequence_length)] gabriel
+        fuse_feature4 = [[] for _ in range(self.params.sequence_length)] #gabriel
         mod = [[] for _ in range(self.params.sequence_length)]
         for i in range(self.params.sequence_length):
             #image_mod = tf.split(axis=3, num_or_size_splits=4, value=images_seq[i])
@@ -249,14 +252,15 @@ class Model(object):
                 fuse_feature1[i].append(modality_feature[0])
                 fuse_feature2[i].append(modality_feature[1])
                 fuse_feature3[i].append(modality_feature[2])
-                #fuse_feature4[i].append(modality_feature[3]) #gabriel
-                mod[i].append(modality_feature[3]) # gabriel
+                fuse_feature4[i].append(modality_feature[3]) #gabriel
+                mod[i].append(modality_feature[4]) # gabriel
         # fusing MRF
         modality_fused1 = []
         modality_fused2 = []
         modality_fused3 = []
-        #modality_fused4 = [] # gabriel
+        modality_fused4 = [] # gabriel
         modality_fused = []
+        # gabriel: cross modality convolution
         for i in range(self.params.sequence_length):
             for j in range(5):
                 with tf.variable_scope("MRF"):
@@ -269,10 +273,10 @@ class Model(object):
                     elif j == 2:
                         concat_classifier = tf.transpose(tf.stack(fuse_feature3[i]), [1,0,2,3,4])
                         modality_fused3.append(tf.squeeze(self.conv_fuse(concat_classifier, is_training=is_training, channel=start_channel, reuse=(i>0 or j>0)), axis=[1]))
-                    #elif j == 3: # gabriel
-                    #    concat_classifier = tf.transpose(tf.stack(fuse_feature4[i]), [1,0,2,3,4])
-                    #    modality_fused4.append(tf.squeeze(self.conv_fuse(concat_classifier, is_training=is_training, channel=start_channel, reuse=(i>0 or j>0)), axis=[1]))
                     elif j == 3: # gabriel
+                        concat_classifier = tf.transpose(tf.stack(fuse_feature4[i]), [1,0,2,3,4])
+                        modality_fused4.append(tf.squeeze(self.conv_fuse(concat_classifier, is_training=is_training, channel=start_channel, reuse=(i>0 or j>0)), axis=[1]))
+                    elif j == 4: # gabriel
                         concat_classifier = tf.transpose(tf.stack(mod[i]), [1,0,2,3,4])
                         modality_fused.append(tf.squeeze(self.conv_fuse(concat_classifier, is_training=is_training, channel=start_channel, reuse=(i>0 or j>0)), axis=[1]))
 
@@ -301,8 +305,8 @@ class Model(object):
         for i in range(self.params.sequence_length):
             with tf.variable_scope("Decoder"):
                 # gabriel
-                #decode_feature = self.decoder(output[i], modality_fused1[i], modality_fused2[i], modality_fused3[i], modality_fused4[i], is_training=is_training, reuse=(i>0))
-                decode_feature = self.decoder(output[i], modality_fused1[i], modality_fused2[i], modality_fused3[i], is_training=is_training, reuse=(i>0))
+                decode_feature = self.decoder(output[i], modality_fused1[i], modality_fused2[i], modality_fused3[i], modality_fused4[i], is_training=is_training, reuse=(i>0))
+                #decode_feature = self.decoder(output[i], modality_fused1[i], modality_fused2[i], modality_fused3[i], is_training=is_training, reuse=(i>0))
             with slim.arg_scope([slim.conv2d],
                             activation_fn=tf.nn.relu,
                             normalizer_fn=slim.batch_norm,
@@ -380,8 +384,11 @@ class Model(object):
             cross_entropy = tf.multiply(cross_entropy, unlabeled_mask_f)
             # gabriel: mean_iou[0]: value, mean_iou[1]: op
             # remove unlabel class
-            t_softmax = tf.boolean_mask(tf.reshape(tf.argmax(softmax, 1), (-1,1)), unlabeled_mask_b)
-            t_labels_for_eval = tf.boolean_mask(labels_for_eval, unlabeled_mask_b)
+            empty_mask_b = tf.not_equal(labels_for_eval, 0)
+            dual_mask_f = tf.multiply(tf.to_float(empty_mask_b), unlabeled_mask_f)
+            dual_mask_b = tf.equal(dual_mask_f,1)
+            t_softmax = tf.boolean_mask(tf.reshape(tf.argmax(softmax, 1), (-1,1)), dual_mask_b)
+            t_labels_for_eval = tf.boolean_mask(labels_for_eval, dual_mask_b)
             mean_iou = slim.metrics.streaming_mean_iou(t_softmax, t_labels_for_eval, self.params.num_classes)
             #mean_iou = slim.metrics.streaming_mean_iou(tf.reshape(tf.argmax(softmax, 1), (-1,1)), labels_for_eval, self.params.num_classes)
             # cross_entropy = self.generalised_dice_loss(logit, target)

@@ -116,19 +116,21 @@ def get_image_label(h5name):
     return imoc, imvi, label
 
 def count_class_freq(label_batch):
-  hist = np.zeros(5)
-  imagesPresent = [0,0,0,0,0]
+  cls_num = 22
+  imagesize = 32
+  hist = np.zeros(cls_num)
+  imagesPresent = [0] * cls_num
   for i in range(len(label_batch)):
-    new_hist = np.bincount(label_batch[i], minlength=5)
+    new_hist = np.bincount(label_batch[i], minlength=cls_num)
     hist += new_hist
-    for ii in range(5):
+    for ii in range(cls_num):
         if (new_hist[ii] != 0):
             imagesPresent[ii] += 1
   print(hist)
-  freqs = [hist[v]/float((imagesPresent[v]+1e-5)*240*240) for v in range(5)]
+  freqs = [hist[v]/float((imagesPresent[v]+1e-5)*32*32) for v in range(cls_num)]
   median = np.median(freqs)
   o = []
-  for i in range(5):
+  for i in range(cls_num):
       if (freqs[i] <= 1e-5):
           o.append(0.0)
       else:
@@ -143,9 +145,10 @@ def checkLabel(label, d):
         return False, 0
 
 def count_freq(labels):
-    freq = np.array([0.0,0.0,0.0,0.0,0.0])
+    #freq = np.array([0.0,0.0,0.0,0.0,0.0])
+    freq = np.zeros((22,))
     for la in labels:
-        freq += np.bincount(la, minlength=5).astype(np.float32)
+        freq += np.bincount(la, minlength=22).astype(np.float32)
     print(freq)
     print(freq/freq.sum())
     count_class_freq(labels)
@@ -175,9 +178,7 @@ def run():
                 im0 = imoc[im_ind].astype('float32')
                 im1 = imvi[im_ind].astype('float32')
                 label = labels[im_ind].astype('float32')
-                #seq = [im0, im1]
-                # gabriel: test
-                seq = [im0, im0]
+                seq = [im0, im1]
 
                 for depth in range(2,62):
                     is_valid, sample_num = checkLabel(label, depth)
@@ -186,11 +187,13 @@ def run():
                     for i in range(sample_num):
                         # image_data is the array containing three image(slices)
                         image_data, label_data = _processing_image(seq, label, depth)
+                        # for freq. count
+                        all_label_data.append(label[depth].flatten().astype(np.int64))
                         example = _convert_to_example(image_data, label_data)
                         all_example.append(example)
                         assert(len(image_data)==len(label_data)*2)
                 #tfrecord_writer.write(example.SerializeToString()) 
-        #count_freq(all_label_data)
+        count_freq(all_label_data)
         print("slices:", len(all_example))
         shuffle(all_example)
         for ex in all_example:
@@ -215,9 +218,7 @@ def run():
                 im0 = imoc[im_ind].astype('float32')
                 im1 = imvi[im_ind].astype('float32')
                 label = labels[im_ind].astype('float32')
-                #seq = [im0, im1]
-                # gabriel: test
-                seq = [im0, im0]
+                seq = [im0, im1]
 
                 ind = 0
                 for depth in range(62):
