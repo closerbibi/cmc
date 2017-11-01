@@ -226,6 +226,8 @@ class Model(object):
 
             return net
 
+    def linear():
+        pass
 
     def net(self, inputs, is_training=True):
         # inputs b, T, w, h, c
