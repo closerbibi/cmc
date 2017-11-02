@@ -156,8 +156,8 @@ def count_freq(labels):
 def run():
     folderTrain = glob.glob(FLAGS.train_data + '/scene*.h5')
     #folderTest = glob.glob( + '/test*.h5')
-    folder_train = folderTrain[:300] ############### test
-    folder_val = folderTrain[-50:] ######## test
+    folder_train = folderTrain[:10] ############### test
+    folder_val = folderTrain[:10] ######## test
     tf_filename = FLAGS.path_save+'scannet_train32.tfrecord'
     all_example = []
     print("Saving training record....")

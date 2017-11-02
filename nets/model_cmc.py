@@ -160,13 +160,13 @@ class Model(object):
             # input b X 32 X 100 X channel
             net = slim.repeat(inputs, 2, slim.conv2d, 40, [k_size, k_size], scope='conv1')
             end_points['conv1'] = net
-            #net = slim.max_pool2d(net, [2, 2], scope='pool1') # => 16 X 50
+            net = slim.max_pool2d(net, [2, 2], scope='pool1') # => 16 X 50
             net = slim.repeat(net, 3, slim.conv2d, 40, [k_size, k_size], scope='conv2') # => 16 X 50
             end_points['conv2'] = net
-            #net = slim.max_pool2d(net, [2, 2], scope='pool2') #  => 8 X 25
+            net = slim.max_pool2d(net, [2, 2], scope='pool2') #  => 8 X 25
             net = slim.repeat(net, 3, slim.conv2d, 40, [k_size, k_size], scope='conv3')
             end_points['conv3'] = net
-            #net = slim.max_pool2d(net, [2, 2], scope='pool3')
+            net = slim.max_pool2d(net, [2, 2], scope='pool3')
             net = slim.repeat(net, 3, slim.conv2d, 40, [k_size, k_size], scope='conv4')
             end_points['conv4'] = net
             # gabriel: layer
@@ -203,14 +203,14 @@ class Model(object):
             print(net.get_shape()) #30
             _, out_h, out_w, _ = net.get_shape().as_list()
             # gabriel: output shape 2--> 1, disable upsampling
-            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*1, out_w*1, start_channel], 1, "up2", reuse=reuse)
+            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up2", reuse=reuse)
             net = tf.multiply(f3, net) # gabriel
             net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv7')
             net = slim.dropout(net, 0.8, is_training=is_training)
             print(net.get_shape()) # 60
             _, out_h, out_w, _ = net.get_shape().as_list()
             # gabriel: output shape 2--> 1, disable upsampling
-            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*1, out_w*1, start_channel], 1, "up3", reuse=reuse)
+            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up3", reuse=reuse)
             net = tf.multiply(f2, net) # gabriel
             net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv8')
             net = slim.dropout(net, 0.8, is_training=is_training)
@@ -218,16 +218,13 @@ class Model(object):
             # gabriel: remove one layer
             _, out_h, out_w, _ = net.get_shape().as_list()
             # gabriel: output shape 2--> 1, disable upsampling
-            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*1, out_w*1, start_channel], 1, "up4", reuse=reuse, finale=True)
+            net = deconv_layer(net, [2, 2, start_channel, start_channel], [batch_size, out_h*2, out_w*2, start_channel], 2, "up4", reuse=reuse, finale=True)
             net = tf.multiply(f1, net)
             net = slim.repeat(net, 2, slim.conv2d, start_channel, [3, 3], scope='conv9')
             net = slim.dropout(net, 0.8, is_training=is_training)
             print(net.get_shape())
 
             return net
-
-    def linear():
-        pass
 
     def net(self, inputs, is_training=True):
         # inputs b, T, w, h, c
@@ -366,8 +363,31 @@ class Model(object):
         loss_list = []
         epsilon = tf.constant(value=1e-10)
         for logit, target in zip(logits, labels):
+            d1 = np.array(range(10)).astype(int)
+            d2 = (np.ones(10)*15).astype(int)
+            d3 = d2
+            d4 = (np.zeros(10)*15).astype(int)
+            dcls = np.array(range(22)).astype(int)
+            # predict center
+            idx_stk = tf.stack((d1,d2,d3,d4), -1)
+            target = tf.gather_nd(target, idx_stk)
+
+            idx_stk = tf.expand_dims(idx_stk, axis=-1)
+            idx_stk_all = idx_stk
+            logit_t = tf.unstack(tf.transpose(logit, [3,0,1,2]))
+            for index, logit in enumerate(logit_t):
+                tmp = tf.gather_nd(logit, tf.stack((d1,d2,d3), -1))
+                tmp = tf.expand_dims(tmp, axis=-1)
+                if index == 0:
+                    logit_tmp = tmp
+                    continue
+                logit_tmp = tf.concat([logit_tmp ,tmp],axis=-1)
+            logit = logit_tmp
+
             logit = tf.reshape(logit, (-1, self.params.num_classes))
             logit = logit + epsilon
+
+
             labels_for_eval = tf.reshape(target, (-1, 1))
             print('label for loss computing', labels_for_eval.get_shape())
 
